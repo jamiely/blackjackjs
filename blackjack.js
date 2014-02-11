@@ -1,4 +1,8 @@
 (function(root) {
+  var STAY = 'stay';
+  var HIT = 'hit';
+  var moves = [STAY, HIT];
+
   var numbers = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
   var suits = ['♣', '♥', '♦', '♠'];
   var newDeck = [];
@@ -92,25 +96,44 @@
     }) + ']';
   }
 
-  function report(players) {
-    function reportCard(card) {
-      return card.number + card.suit;
+  function reportCard(card) {
+    return card.number + card.suit;
+  }
+  function reportPlayer(player) {
+    function p(msg) {
+      return "<Player " + player.name + ": " + msg + ">";
     }
+    if(! player.hand || player.hand.length == 0) return p('No cards');
 
-    var result = players.map(function(player) {
-      function p(msg) {
-        return "<Player " + player.name + ": " + msg + ">";
-      }
-      if(! player.hand || player.hand.length == 0) return p('No cards');
+    var hand = inspectHand(player).map(reportCard).join(',') + " value=" + 
+      pNested(handValues(player.hand)) + " busted?" + 
+      (busted(player.hand) ? "yes" : "no") + " moves=" +
+      possibleMoves(player);
 
-      var hand = inspectHand(player).map(reportCard).join(',') + " value=" + 
-        pNested(handValues(player.hand)) + " busted? " + 
-        (busted(player.hand) ? "yes" : "no");
+    return p(hand);
+  }
 
-      return p(hand);
-    }).map(prepender('  ')).join('\n');
+  function report(players) {
+    var result = players.map(reportPlayer).
+      map(prepender('  ')).join('\n');
 
     return "<Game \n" + result + ">";
+  }
+
+  function dealerStayValue(val) {
+    return val <= 21 && val >= 17;
+  }
+  function playerStayValue(val) {
+    return val == 21;
+  }
+
+  function possibleMoves(player) {
+    var vals = handValues(player.hand);
+    if(vals.every(overBustedValue)) return [];
+    if(player.dealer && vals.some(dealerStayValue)) return [STAY];
+    if(vals.some(playerStayValue)) return [STAY];
+
+    return moves;
   }
 
   function cardValues(card) {
@@ -139,10 +162,12 @@
     return inner([[]], hand.map(cardValues)).map(sum);
   }
 
+  function overBustedValue(val) {
+    return val > 21;
+  }
+
   function busted(hand) {
-    return handValues(hand).every(function(val) {
-      return val > 21;
-    });
+    return handValues(hand).every(overBustedValue);
   }
 
   function runMonteCarlo(game) {
