@@ -51,7 +51,9 @@
 
   function deal(deck, players, cards) {
     for(var i = 0; i < players.length; i ++) {
-      players[i].hand = deck.splice(0, cards);
+      var hand = players[i].hand || [];
+      hand.push.apply(hand, deck.splice(0, cards));
+      players[i].hand = hand;
     }
   }
 
@@ -67,6 +69,8 @@
     var deck = newBlackjackDeck(6);
     var players = newPlayers(4);
     firstDeal(deck, players);
+    // test busting
+    deal(deck, players, 1);
     console.log(report(players));
   }
 
@@ -77,9 +81,15 @@
   }
 
   function inspectHand(player) {
-    if(player.me) return player.hand;
+    return player.hand;
+  }
 
-    return [{number: '?', suit: '?'}].concat(player.hand.slice(1));
+  function pNested(arr) {
+    if(! (arr instanceof Array)) return arr + '';
+
+    return '[' + arr.map(function(a) {
+      return pNested(a);
+    }) + ']';
   }
 
   function report(players) {
@@ -93,10 +103,67 @@
       }
       if(! player.hand || player.hand.length == 0) return p('No cards');
 
-      return p(inspectHand(player).map(reportCard).join(','));
+      var hand = inspectHand(player).map(reportCard).join(',') + " value=" + 
+        pNested(handValues(player.hand)) + " busted? " + 
+        (busted(player.hand) ? "yes" : "no");
+
+      return p(hand);
     }).map(prepender('  ')).join('\n');
 
     return "<Game \n" + result + ">";
+  }
+
+  function cardValues(card) {
+    if(card.number == 'A') return [1, 11];
+    if(['J', 'Q', 'K'].indexOf(card.number) != -1) return [10];
+    return [parseInt(card.number)];
+  }
+
+  function handValues(hand) {
+    function merge(m, arr) {
+      m.push.apply(m, arr);
+      return m;
+    }
+    function inner(memo, rest) {
+      if(rest.length == 0) return memo;
+
+      return rest[0].map(function(cardValue) {
+        return inner(memo.map(function(hand) {
+          return hand.concat([cardValue]);
+        }), rest.slice(1));
+      }).reduce(merge, []);
+    }
+    function sum(vals) {
+      return vals.reduce(function(s, i) { return s + i; }, 0);
+    }
+    return inner([[]], hand.map(cardValues)).map(sum);
+  }
+
+  function busted(hand) {
+    return handValues(hand).every(function(val) {
+      return val > 21;
+    });
+  }
+
+  function runMonteCarlo(game) {
+    // get the moves for the current player
+    // for each of the moves
+    //   make the move 
+    //   randomly play out the rest of the game
+    //   do this maybe 1000 times each
+    //   determine win loss percentage
+  }
+
+  function shallowClone(a) {
+    if(a instanceof Array) return a.slice(0);
+    if(typeof a == 'object') {
+      var c = {};
+      for(var i in a) {
+        c[i] = a[i];
+      }
+      return c;
+    }
+    return a;
   }
 
   play();
