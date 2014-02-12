@@ -23,6 +23,7 @@
       a[i] = a[j];
       a[j] = swap;
     }
+    return a;
   }
 
   function newPlayers(count) {
@@ -73,8 +74,13 @@
     var deck = newBlackjackDeck(6);
     var players = newPlayers(4);
     firstDeal(deck, players);
-    // test busting
-    deal(deck, players, 1);
+    console.log(report(players));
+
+    runMonteCarlo({
+      players: players,
+      deck: deck
+    }, 1);
+
     console.log(report(players));
   }
 
@@ -117,7 +123,9 @@
     var result = players.map(reportPlayer).
       map(prepender('  ')).join('\n');
 
-    return "<Game \n" + result + ">";
+    return "<Game \n" + result + 
+      "\nwinners=" + winners(players).map(function(p){return p.name}) + 
+      ">";
   }
 
   function dealerStayValue(val) {
@@ -131,7 +139,7 @@
     var vals = handValues(player.hand);
     if(vals.every(overBustedValue)) return [];
     if(player.dealer && vals.some(dealerStayValue)) return [STAY];
-    if(vals.some(playerStayValue)) return [STAY];
+    if(vals.some(playerStayValue)) return [];
 
     return moves;
   }
@@ -170,13 +178,177 @@
     return handValues(hand).every(overBustedValue);
   }
 
-  function runMonteCarlo(game) {
-    // get the moves for the current player
-    // for each of the moves
-    //   make the move 
-    //   randomly play out the rest of the game
-    //   do this maybe 1000 times each
-    //   determine win loss percentage
+  function validHandValues(hand) {
+    return handValues(hand).filter(function(v) { 
+      return ! overBustedValue(v);
+    });
+  }
+
+  function partitionByDealer(players) {
+    return players.reduce(function(memo, player) {
+      if(player.dealer) memo.dealer = player;
+      else memo.nonDealers.push(player);
+      return memo;
+    }, {dealer: null, nonDealers: []});
+  }
+
+  function winnerIndices(players) {
+    var ws = winners(players);
+    var names = players.map(function(p){ return p.name});
+    return ws.map(function(player) {
+      return names.indexOf(player.name);
+    });
+  }
+
+  function winners(players) {
+    var parts = partitionByDealer(players);
+    var dealer = parts.dealer;
+    var nonBusted = parts.nonDealers.filter(function(player) {
+      return ! busted(player.hand);
+    });
+    if(busted(dealer.hand)) return nonBusted;
+
+    var dealerHandValue = Math.max.apply(null, validHandValues(dealer.hand));
+    function beatDealer(player) {
+      return validHandValues(player.hand).some(function(v) {
+        return dealerStayValue(dealerHandValue) && 
+          (v >= dealerHandValue || v == 21);
+      });
+    }
+
+    return nonBusted.filter(beatDealer);
+  }
+
+  function clonePlayers(players) {
+    return players.map(function(p) {
+      var newP = {};
+      for(var i in p) {
+        newP[i] = p[i];
+      }
+      newP.hand = shallowClone(p.hand);
+
+      return newP;
+    });
+  }
+
+  function visibleCards(players, playerIndex) {
+    return players.map(function(p){
+      return p.hand;
+    }).reduce(function (memo, hand, index) {
+      var sliceIndex = playerIndex == index ? 0 : 1;
+      memo.push.apply(memo, hand.slice(sliceIndex));
+      return memo;
+    }, []);
+  }
+
+  function monteCarloDeck(players, playerIndex) {
+    var vis = visibleCards(players, playerIndex);
+    function cacheKey(card) {
+      return card.number + ':' + card.suit;
+    }
+    var cache = vis.reduce(function(memo, c) {
+      memo[cacheKey(c)] = c;
+      return memo;
+    }, {});
+    var deck = shallowClone(newDeck).filter(function(c) {
+      return ! cache[cacheKey(c)];
+    });
+
+    shuffle(deck);
+    // remove a number of cards equal to those unknown
+    for(var i = 1; i < players.length; i++) deck.pop();
+
+    return deck;
+  }
+
+  function runMonteCarlo(game, playerIndex) {
+    var TRIALS = 1000;
+    function whileHit(player, deckCopy) {
+      do {
+        var result = randomMove(player, deckCopy);
+      } while(result.move == HIT);
+    }
+    //var deck = game.deck;
+    var deck = monteCarloDeck(game.players, playerIndex);
+    var ms = possibleMoves(game.players[playerIndex]);
+
+    var results = ms.map(function(move) {
+      var deckCopyA = shallowClone(deck);
+      var playersA = clonePlayers(game.players);
+      var playerA = playersA[playerIndex];
+      makeMove(move, playerA, deckCopyA);
+
+      var wins = 0, trials = 0;
+      for(var i = 0; i < TRIALS; i++) {
+        var playersB = clonePlayers(playersA);
+        var playerB = playersB[playerIndex];
+        var deckCopyB = shuffle(shallowClone(deckCopyA));
+        if(move == HIT) whileHit(playerB, deckCopyB);
+
+        // assume we never go back to a previous player
+        for(var j = playerIndex + 1; j < playersB.length; j++) {
+          whileHit(playersB[j], deckCopyB);
+        }
+
+        // at this point, everybody is done, so determine winners
+        var ws = winnerIndices(playersB);
+        var hasWon = ws.indexOf(playerIndex) != -1;
+
+        if(hasWon) wins++;
+        trials++;
+      }
+
+      return { 
+        player: game.players[playerIndex],
+        playerIndex: playerIndex,
+        move: move,
+        trials: trials,
+        wins: wins
+      }
+    });
+
+    console.log(reportResults(results));
+    console.log('Player should ' + recommendedMove(results));
+  }
+
+  function recommendedMove(results) {
+    return results.reduce(function(item, result) {
+      return result.wins > item.wins ? result : item;
+    }, {move: null, wins: -1}).move;
+  }
+
+  function reportResults(results) {
+    return results.map(function(result) {
+      var txt = [];
+      for(var i in result) { txt.push(i); }
+
+      return txt.map(function(i) {
+        return i + '=' + result[i];
+      }).
+        concat(['name=' + result.player.name]).
+        join(', ');
+    }).join('\n');
+  }
+
+  function makeMove(move, player, deck) {
+    if(move == HIT) {
+      hit(deck, player);
+    }
+  }
+
+  function randomMove(player, deck) {
+    var ms = possibleMoves(player);
+    var rtn = {
+      moves: ms,
+      count: ms.length,
+      move: null
+    };
+    if(rtn.count == 0) return rtn;
+
+    var m = ms[Math.floor(Math.random() * ms.length)];
+    makeMove(m, player, deck);
+    rtn.move = m;
+    return rtn;
   }
 
   function shallowClone(a) {
