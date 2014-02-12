@@ -73,15 +73,23 @@
   function play() {
     var deck = newBlackjackDeck(6);
     var players = newPlayers(4);
+    var renderer = new HtmlRenderer(document.getElementById('game'));
+
     firstDeal(deck, players);
+    renderer.render({players: players});
+
     console.log(report(players));
 
+    setTimeout(function() {
     runMonteCarlo({
       players: players,
       deck: deck
     }, 1);
 
     console.log(report(players));
+    renderer.render({players: players});
+    }, 1000);
+
   }
 
   function prepender(prefix) {
@@ -309,6 +317,11 @@
 
     console.log(reportResults(results));
     console.log('Player should ' + recommendedMove(results));
+
+    return {
+      results: results,
+      recommendedMove: recommendedMove(results)
+    };
   }
 
   function recommendedMove(results) {
@@ -362,6 +375,35 @@
     }
     return a;
   }
+
+  var HtmlRenderer = function(el) {
+    function renderCard(card) {
+      return '<div class="card">' + card.number + ' ' + card.suit + '</div>';
+    }
+    function renderBackface() {
+      return '<div class="card facedown">? ?</div>';
+    }
+    function renderHand(hand, me) {
+      return '<div class="hand">' +  
+        (me ? hand.map(renderCard) : 
+              [renderBackface()].concat(hand.slice(1).map(renderCard))).join('') + 
+        '</div>';
+    }
+
+    function renderPlayer(player) {
+      return '<div class="player"><div class="name">' + player.name + 
+        '</div>' + renderHand(player.hand, player.me) + '</div>';
+    }
+
+    function renderGame(game) {
+      return '<div class="game">' + game.players.map(renderPlayer).join('') +
+        '</div>';
+    }
+
+    this.render = function(game) {
+      el.innerHTML = renderGame(game);
+    };
+  };
 
   play();
 })(window);
