@@ -76,7 +76,8 @@
 
     return {
       deck: deck,
-      players: players
+      players: players,
+      currentPlayer: 0
     }
   }
 
@@ -92,15 +93,11 @@
     console.log(report(game));
 
     setTimeout(function() {
-    runMonteCarlo({
-      players: players,
-      deck: deck
-    }, 0);
-
-    console.log(report(game));
-    renderer.render(game);
-    }, 1000);
-
+      var results = runMonteCarlo(game, game.currentPlayer);
+      game.hint = results;
+      console.log(report(game));
+      renderer.render(game);
+    }, 100);
   }
 
   function prepender(prefix) {
@@ -331,6 +328,8 @@
                 ' should ' + recommendedMove(results));
 
     return {
+      playerIndex: playerIndex,
+      player: game.players[playerIndex],
       results: results,
       recommendedMove: recommendedMove(results)
     };
@@ -402,14 +401,36 @@
         '</div>';
     }
 
-    function renderPlayer(player) {
-      return '<div class="player"><div class="name">' + player.name + 
-        '</div>' + renderHand(player.hand, player.dealer) + '</div>';
+    function genRenderPlayer(game) {
+      return function(player, playerIndex) {
+        var current = game.currentPlayer == playerIndex;
+        var extraClass = current ? " current" : "";
+        return '<div class="player' + extraClass + '">'
+          + renderHand(player.hand, player.dealer) 
+          + '<div class="name">' + player.name + '</div>' 
+          + renderButtons(current)
+          + '</div>';
+      }
+    }
+
+    function renderHint(game) {
+      var hint = game.hint;
+      return hint ? '<div class="hint">Player "' 
+        + hint.player.name + '" should ' 
+        + hint.recommendedMove 
+        + '</div>' : '';
+    }
+
+    function renderButtons(visible) {
+      var cssVisiblity = visible ? "visible" : "hidden";
+      return '<div style="visibility:' + cssVisiblity 
+        + '"><button>Stay</button><button>Hit</button></div>';
     }
 
     function renderGame(game) {
-      return '<div class="game">' + game.players.map(renderPlayer).join('') +
-        '</div>';
+      var renderPlayer = genRenderPlayer(game);
+      return '<div class="game">' + game.players.map(renderPlayer).join('') + '</div>' 
+        + renderHint(game);
     }
 
     this.render = function(game) {
