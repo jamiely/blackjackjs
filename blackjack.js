@@ -62,23 +62,34 @@
     }
   }
 
-  function firstDeal(deck, players) {
-    deal(deck, players, 2);
+  function firstDeal(game) {
+    deal(game.deck, game.players, 2);
   }
 
   function hit(deck, player) {
     deal(deck, [player], 1);
   }
 
-  function play() {
+  function newGame() {
     var deck = newBlackjackDeck(6);
     var players = newPlayers(4);
+
+    return {
+      deck: deck,
+      players: players
+    }
+  }
+
+  function play() {
+    var game = newGame();
+    var deck = game.deck;
+    var players = game.players;
     var renderer = new HtmlRenderer(document.getElementById('game'));
 
-    firstDeal(deck, players);
-    renderer.render({players: players});
+    firstDeal(game);
+    renderer.render(game);
 
-    console.log(report(players));
+    console.log(report(game));
 
     setTimeout(function() {
     runMonteCarlo({
@@ -86,8 +97,8 @@
       deck: deck
     }, 0);
 
-    console.log(report(players));
-    renderer.render({players: players});
+    console.log(report(game));
+    renderer.render(game);
     }, 1000);
 
   }
@@ -127,7 +138,8 @@
     return p(hand);
   }
 
-  function report(players) {
+  function report(game) {
+    var players = game.players;
     var result = players.map(reportPlayer).
       map(prepender('  ')).join('\n');
 
@@ -147,7 +159,7 @@
     var vals = handValues(player.hand);
     if(vals.every(overBustedValue)) return [];
     if(player.dealer && vals.some(dealerStayValue)) return [STAY];
-    if(vals.some(playerStayValue)) return [];
+    if(vals.some(playerStayValue)) return [STAY];
 
     return moves;
   }
