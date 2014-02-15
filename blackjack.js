@@ -79,7 +79,8 @@
       deck: deck,
       players: players,
       currentPlayer: 0,
-      revealDealer: false
+      revealDealer: false,
+      isGameOver: false
     }
   }
 
@@ -106,9 +107,24 @@
 
   function handleDealerMove(game) {
     var p = game.players[game.currentPlayer];
-    if(! p.dealer) return;
+    if(!p || ! p.dealer) return;
 
     game.revealDealer = true;
+
+    if(possibleMoves(p).length == 0) {
+      game.isGameOver = true;
+    }
+  }
+
+  function handleGameOver(game) {
+    if(game.isGameOver) return;
+
+    if(game.currentPlayer >= game.players.length) game.isGameOver = true;
+
+    var current = game.players[game.currentPlayer];
+    if(!current.dealer) return;
+
+    game.isGameOver = possibleMoves(current).length == 0;
   }
 
   function play() {
@@ -123,13 +139,15 @@
 
       if(action == 'hit') {
         hit(game.deck, game.players[game.currentPlayer]);
-        render();
       } else {
         game.currentPlayer++;
       }
 
       evaluateBusted(game);
       handleDealerMove(game);
+      handleGameOver(game);
+      report(game);
+      render();
       delayedHint(game, render);
     };
 
@@ -187,9 +205,11 @@
     var result = players.map(reportPlayer).
       map(prepender('  ')).join('\n');
 
-    return "<Game \n" + result + 
-      "\nwinners=" + winners(players).map(function(p){return p.name}) + 
-      ">";
+    return "<Game \n" + result
+      + "\nwinners=" + winners(players).map(function(p){return p.name})
+      + "\ngameOver=" + game.isGameOver
+      + " \nrevealDealer=" + game.revealDealer
+      + ">";
   }
 
   function dealerStayValue(val) {
@@ -202,7 +222,7 @@
   function possibleMoves(player) {
     var vals = handValues(player.hand);
     if(vals.every(overBustedValue)) return [];
-    if(player.dealer && vals.some(dealerStayValue)) return [STAY];
+    if(player.dealer) return vals.some(dealerStayValue) ? [] : [HIT];
     if(vals.some(playerStayValue)) return [STAY];
 
     return moves;
@@ -325,7 +345,7 @@
   }
 
   function runMonteCarlo(game, playerIndex) {
-    var TRIALS = 1000;
+    var TRIALS = 2000;
     function whileHit(player, deckCopy) {
       do {
         var result = randomMove(player, deckCopy);
@@ -334,6 +354,8 @@
     //var deck = game.deck;
     var deck = monteCarloDeck(game.players, playerIndex);
     var ms = possibleMoves(game.players[playerIndex]);
+
+    console.log('Possible moves: ' + ms);
 
     var results = ms.map(function(move) {
       var deckCopyA = shallowClone(deck);
@@ -469,18 +491,22 @@
         return '<div class="player' + extraClass + '">'
           + renderHand(player.hand, player.dealer && !game.revealDealer) 
           + '<div class="name">' + player.name + '</div>' 
-          + renderButtons(possibleMoves(player), current)
+          + '<div class="values">' + handValues(player.hand).join(', ') + '</div>'
+          + (game.isGameOver ? '' : renderButtons(possibleMoves(player), current))
           + '</div>';
       }
     }
 
     function renderHint(game) {
+      function h(msg) { return '<div class="hint">' + msg + '</div>';}
+
+      if(game.isGameOver) return h('Game over');
+
       var hint = game.hint;
       var showHint = hint && hint.recommendedMove && ! game.revealDealer;
-      return showHint ? '<div class="hint">Player "' 
+      return showHint ? h('Player "' 
         + hint.player.name + '" should ' 
-        + hint.recommendedMove 
-        + '</div>' : '';
+        + hint.recommendedMove) : '';
     }
 
     function renderButtons(moves, visible) {
@@ -492,9 +518,17 @@
         + '">' + moves.map(button).join('\n') + '&nbsp;</div>';
     }
 
+    function renderGameOver(game) {
+      if(!game.isGameOver) return '';
+
+      return '<div>Game over</div>';
+    }
+
     function renderGame(game) {
       var renderPlayer = genRenderPlayer(game);
-      return '<div class="game">' + game.players.map(renderPlayer).join('') + '</div>' 
+      var extraClass = game.isGameOver ? ' gameover' : '';
+      return '<div class="game ' + extraClass + '">' 
+        + game.players.map(renderPlayer).join('') + '</div>' 
         + renderHint(game);
     }
 

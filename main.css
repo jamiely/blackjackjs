@@ -15,7 +15,7 @@
   border: 3px white solid;
   border-radius: 3px;
   display: inline-block;
-  width: 250px;
+  width: 290px;
   margin: 10px;
   padding: 10px;
 }
@@ -58,3 +58,11 @@ button.action {
   background-color: red;
   text-indent: -1000px;
 }
+
+.game.gameover {
+  background-color: gray;
+}
+.game.gameover .player.current { 
+  background-color: transparent;
+}
+
