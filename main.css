@@ -19,9 +19,15 @@
   margin: 10px;
   padding: 10px;
 }
-.player.current {
-  border: 3px white double;
-  background-color: #093;
+  .player.current {
+    border: 3px white double;
+    background-color: #093;
+  }
+  .player.busted {
+    background-color: red;
+  }
+button.action {
+  text-transform: capitalize;
 }
 
 .player > .name {

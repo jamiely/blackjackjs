@@ -33,7 +33,8 @@
         name: String.fromCharCode(65+i),
         hand: null,
         dealer: false,
-        me: i == 0
+        me: i == 0,
+        busted: false
       });
     }
     players.push({
@@ -77,27 +78,73 @@
     return {
       deck: deck,
       players: players,
-      currentPlayer: 0
+      currentPlayer: 0,
+      revealDealer: false
     }
+  }
+
+  function getHint(game, callback) {
+    var results = runMonteCarlo(game, game.currentPlayer);
+    game.hint = results;
+    console.log(report(game));
+    if(callback) callback(results);
+  }
+
+  function delayedHint(game, callback) {
+    setTimeout(function() {
+      getHint(game, callback);
+    }, 100);
+  }
+
+  function evaluateBusted(game) {
+    var current = game.players[game.currentPlayer];
+    if(busted(current.hand)) {
+      game.currentPlayer++;
+      current.busted = true;
+    }
+  }
+
+  function handleDealerMove(game) {
+    var p = game.players[game.currentPlayer];
+    if(! p.dealer) return;
+
+    game.revealDealer = true;
   }
 
   function play() {
     var game = newGame();
     var deck = game.deck;
     var players = game.players;
-    var renderer = new HtmlRenderer(document.getElementById('game'));
+
+    var eventHandler = function(evt, renderer, action) {
+      if(action == null) return;
+
+      function render() { renderer.render(game); }
+
+      if(action == 'hit') {
+        hit(game.deck, game.players[game.currentPlayer]);
+        render();
+      } else {
+        game.currentPlayer++;
+      }
+
+      evaluateBusted(game);
+      handleDealerMove(game);
+      delayedHint(game, render);
+    };
+
+    var renderer = new HtmlRenderer(
+      document.getElementById('game'),
+      eventHandler);
 
     firstDeal(game);
     renderer.render(game);
 
     console.log(report(game));
 
-    setTimeout(function() {
-      var results = runMonteCarlo(game, game.currentPlayer);
-      game.hint = results;
-      console.log(report(game));
+    delayedHint(game, function(results) {
       renderer.render(game);
-    }, 100);
+    });
   }
 
   function prepender(prefix) {
@@ -387,7 +434,20 @@
     return a;
   }
 
-  var HtmlRenderer = function(el) {
+  var HtmlRenderer = function(el, eventHandler) {
+    var self = this;
+
+    function setupEventHandlers(el, eventHandler) {
+      el.addEventListener('click', function(evt) {
+        var action = evt.toElement.getAttribute('data-action');
+        console.log(evt);
+        console.log(action);
+        eventHandler(evt, self, action);
+      });
+    }
+
+    setupEventHandlers(el, eventHandler);
+
     function renderCard(card) {
       return '<div class="card">' + card.number + ' ' + card.suit + '</div>';
     }
@@ -405,26 +465,31 @@
       return function(player, playerIndex) {
         var current = game.currentPlayer == playerIndex;
         var extraClass = current ? " current" : "";
+        if(player.busted) extraClass += ' busted';
         return '<div class="player' + extraClass + '">'
-          + renderHand(player.hand, player.dealer) 
+          + renderHand(player.hand, player.dealer && !game.revealDealer) 
           + '<div class="name">' + player.name + '</div>' 
-          + renderButtons(current)
+          + renderButtons(possibleMoves(player), current)
           + '</div>';
       }
     }
 
     function renderHint(game) {
       var hint = game.hint;
-      return hint ? '<div class="hint">Player "' 
+      var showHint = hint && hint.recommendedMove && ! game.revealDealer;
+      return showHint ? '<div class="hint">Player "' 
         + hint.player.name + '" should ' 
         + hint.recommendedMove 
         + '</div>' : '';
     }
 
-    function renderButtons(visible) {
+    function renderButtons(moves, visible) {
+      function button(action) {
+        return '<button class="action" data-action="' + action + '">' + action + '</button>';
+      }
       var cssVisiblity = visible ? "visible" : "hidden";
       return '<div style="visibility:' + cssVisiblity 
-        + '"><button>Stay</button><button>Hit</button></div>';
+        + '">' + moves.map(button).join('\n') + '&nbsp;</div>';
     }
 
     function renderGame(game) {
