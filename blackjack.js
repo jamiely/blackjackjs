@@ -84,7 +84,7 @@
     runMonteCarlo({
       players: players,
       deck: deck
-    }, 1);
+    }, 0);
 
     console.log(report(players));
     renderer.render({players: players});
@@ -240,10 +240,9 @@
   }
 
   function visibleCards(players, playerIndex) {
-    return players.map(function(p){
-      return p.hand;
-    }).reduce(function (memo, hand, index) {
-      var sliceIndex = playerIndex == index ? 0 : 1;
+    return players.reduce(function (memo, player, index) {
+      var hand = player.hand;
+      var sliceIndex = player.dealer ? 1 : 0;
       memo.push.apply(memo, hand.slice(sliceIndex));
       return memo;
     }, []);
@@ -263,8 +262,8 @@
     });
 
     shuffle(deck);
-    // remove a number of cards equal to those unknown
-    for(var i = 1; i < players.length; i++) deck.pop();
+    // remove a card representing the dealer's unknown card.
+    deck.pop(); 
 
     return deck;
   }
@@ -316,7 +315,8 @@
     });
 
     console.log(reportResults(results));
-    console.log('Player should ' + recommendedMove(results));
+    console.log('Player ' + game.players[playerIndex].name + 
+                ' should ' + recommendedMove(results));
 
     return {
       results: results,
@@ -383,16 +383,16 @@
     function renderBackface() {
       return '<div class="card facedown">? ?</div>';
     }
-    function renderHand(hand, me) {
+    function renderHand(hand, dealer) {
       return '<div class="hand">' +  
-        (me ? hand.map(renderCard) : 
+        (!dealer ? hand.map(renderCard) : 
               [renderBackface()].concat(hand.slice(1).map(renderCard))).join('') + 
         '</div>';
     }
 
     function renderPlayer(player) {
       return '<div class="player"><div class="name">' + player.name + 
-        '</div>' + renderHand(player.hand, player.me) + '</div>';
+        '</div>' + renderHand(player.hand, player.dealer) + '</div>';
     }
 
     function renderGame(game) {
