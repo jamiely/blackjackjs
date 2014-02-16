@@ -34,7 +34,9 @@
         hand: null,
         dealer: false,
         me: i == 0,
-        busted: false
+        busted: false,
+        handValues: null,
+        won: false
       });
     }
     players.push({
@@ -116,15 +118,37 @@
     }
   }
 
+  function determineWinners(game) {
+    if(! game.isGameOver) return;
+
+    var ws = winners(game.players);
+    ws.forEach(function(player) {
+      player.won = true;
+    });
+  }
+
   function handleGameOver(game) {
     if(game.isGameOver) return;
 
-    if(game.currentPlayer >= game.players.length) game.isGameOver = true;
+    if(game.currentPlayer >= game.players.length) {
+      game.isGameOver = true;
+      return;
+    }
 
     var current = game.players[game.currentPlayer];
     if(!current.dealer) return;
 
     game.isGameOver = possibleMoves(current).length == 0;
+  }
+
+  function calculateHands(game) {
+    game.players.forEach(function(player) {
+      player.handValues = handValues(player.hand);
+    });
+  }
+
+  function resetHint(game) {
+    game.hint = null;
   }
 
   function play() {
@@ -133,19 +157,23 @@
     var players = game.players;
 
     var eventHandler = function(evt, renderer, action) {
+      if(game.isGameOver) return;
       if(action == null) return;
 
       function render() { renderer.render(game); }
 
+      resetHint(game);
       if(action == 'hit') {
         hit(game.deck, game.players[game.currentPlayer]);
       } else {
         game.currentPlayer++;
       }
 
+      calculateHands(game);
       evaluateBusted(game);
       handleDealerMove(game);
       handleGameOver(game);
+      determineWinners(game);
       report(game);
       render();
       delayedHint(game, render);
@@ -156,6 +184,7 @@
       eventHandler);
 
     firstDeal(game);
+    calculateHands(game);
     renderer.render(game);
 
     console.log(report(game));
@@ -487,11 +516,16 @@
       return function(player, playerIndex) {
         var current = game.currentPlayer == playerIndex;
         var extraClass = current ? " current" : "";
+        var dealerReveal = !player.dealer || game.revealDealer;
         if(player.busted) extraClass += ' busted';
+        if(player.won) extraClass += ' won';
+        if(player.dealer) extraClass += ' dealer';
+
         return '<div class="player' + extraClass + '">'
           + renderHand(player.hand, player.dealer && !game.revealDealer) 
-          + '<div class="name">' + player.name + '</div>' 
-          + '<div class="values">' + handValues(player.hand).join(', ') + '</div>'
+          + '<div class="name">' + player.name  
+            + (dealerReveal ? ': ' + player.handValues.join(', ') : '')
+            + '</div>' 
           + (game.isGameOver ? '' : renderButtons(possibleMoves(player), current))
           + '</div>';
       }

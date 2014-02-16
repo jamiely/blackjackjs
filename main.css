@@ -26,6 +26,9 @@
   .player.busted {
     background-color: red;
   }
+  .player.won {
+    background-color: #9C9603;
+  }
 button.action {
   text-transform: capitalize;
 }
@@ -62,7 +65,10 @@ button.action {
 .game.gameover {
   background-color: gray;
 }
-.game.gameover .player.current { 
-  background-color: transparent;
-}
+  .game.gameover .player.current { 
+    background-color: transparent;
+  }
+  .game.gameover .player.dealer {
+    border: 3px blue double;
+  }
 
